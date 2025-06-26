@@ -13,6 +13,7 @@ export async function up(knex) {
         table.decimal("box_storage_liter", 10, 2);
         table.date("date").notNullable();
         table.timestamp("updated_at").defaultTo(knex.fn.now());
+        table.unique(["warehouse_name", "date"]);
     });
 }
 
