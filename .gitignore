@@ -1,5 +1,5 @@
 node_modules
 .local
-.env
+.env.dev
 dist
 rising-waters-435109-t3-50c33d00c07f.json
