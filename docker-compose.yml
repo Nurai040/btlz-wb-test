@@ -1,29 +1,79 @@
-version: "3.9"
+version: "3.8"
+
+networks:
+    postgres-net:
+        driver: bridge
+
+volumes:
+    postgres-vol:
+        driver: local
 
 services:
     postgres:
-        image: postgres:15
         container_name: postgres
-        restart: always
+        image: postgres:16.1-alpine
+
         environment:
-            POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: postgres
-            POSTGRES_DB: postgres
-        ports:
-            - "5432:5432"
+            - POSTGRES_PORT=${POSTGRES_PORT}
+            - POSTGRES_HOST=${POSTGRES_HOST}
+            - POSTGRES_DB=${POSTGRES_DB}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - PGDATA=/var/lib/postgresql/data/pgdata
+
         volumes:
-            - pgdata:/var/lib/postgresql/data
+            - postgres-vol:/var/lib/postgresql/data
+
+        networks:
+            - postgres-net
+
+        expose:
+            - ${POSTGRES_PORT}
+
+        ports:
+            - ${POSTGRES_PORT}:${POSTGRES_PORT}
+
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+        restart: unless-stopped
 
     app:
-        build: .
-        container_name: wb-tariff-service
-        restart: always
-        env_file:
-            - .env
-        depends_on:
-            - postgres
-        volumes:
-            - .:/app
+        container_name: app
+        build:
+            context: .
+            dockerfile: Dockerfile
 
-volumes:
-    pgdata:
+        env_file: .env
+
+        environment:
+            WB_API_TOKEN: ${WB_API_TOKEN}
+            GOOGLE_SHEETS_ID: ${GOOGLE_SHEETS_ID}
+            GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_PATH: ${GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_PATH}
+            POSTGRES_HOST: postgres
+            POSTGRES_PORT: ${POSTGRES_PORT}
+            POSTGRES_DB: ${POSTGRES_DB}
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            APP_PORT: ${APP_PORT}
+            NODE_ENV: production
+
+        ports:
+            - ${APP_PORT}:${APP_PORT}
+
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+        networks:
+            - postgres-net
+
+        volumes:
+            - ./:/app
+
+        command: ["sh", "-c", "npm run knex migrate rollback --all && npm run knex migrate latest && npm run start"]
+        restart: unless-stopped
